@@ -1,0 +1,138 @@
+import os
+import wave
+import requests
+import numpy as np
+import sounddevice as sd
+import subprocess
+from openwakeword.model import Model
+from faster_whisper import WhisperModel
+from piper import PiperVoice
+
+# ==================== CONFIGURATION ====================
+SAMPLE_RATE = 16000
+CHUNK = 1280  # 80ms chunks for openWakeWord
+WAKE_WORD = "alexa"  # Options: alexa, hey_mycroft, jarvis, etc.
+OLLAMA_MODEL = "qwen2.5:0.5b"  # 0.5b is recommended for Pi speed
+PIPER_MODEL_PATH = "piper_voice/en_US-lessac-medium.onnx"
+
+# Specify a custom mic index if needed (e.g., MIC_DEVICE = 1)
+MIC_DEVICE = None  
+
+# ==================== INITIALIZATION ====================
+print("Loading engines...")
+
+# 1. Initialize OpenWakeWord
+owwModel = Model(wakeword_models=[WAKE_WORD], inference_framework="onnx")
+
+# 2. Initialize Whisper (int8 quantization for Pi CPU efficiency)
+whisper = WhisperModel("tiny.en", device="cpu", compute_type="int8")
+
+# 3. Initialize Piper TTS directly in memory
+voice = PiperVoice.load(PIPER_MODEL_PATH)
+
+# ==================== HELPER FUNCTIONS ====================
+def record_audio(duration=5, filename="input.wav"):
+    """Record fixed duration audio upon wake word trigger."""
+    print("Listening...")
+    audio_data = sd.rec(
+        int(duration * SAMPLE_RATE), 
+        samplerate=SAMPLE_RATE, 
+        channels=1, 
+        dtype='int16', 
+        device=MIC_DEVICE
+    )
+    sd.wait()
+    
+    with wave.open(filename, 'wb') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(SAMPLE_RATE)
+        wf.writeframes(audio_data.tobytes())
+    return filename
+
+def speak_text_direct(text):
+    """Feeds text directly to Piper and streams audio out through sounddevice."""
+    if not text.strip():
+        return
+
+    # Stream PCM audio through sounddevice matching Piper's native sample rate
+    with sd.RawOutputStream(
+        samplerate=voice.config.sample_rate,
+        channels=1,
+        dtype="int16"
+    ) as stream:
+        for chunk in voice.synthesize(text):
+            stream.write(chunk.audio_int16_bytes)
+
+def stream_qwen_and_speak(prompt):
+    """Passes user prompt to Ollama Qwen and streams spoken sentences back."""
+    url = "http://localhost:11434/api/generate"
+    payload = {
+        "model": OLLAMA_MODEL,
+        "system": "You are a concise voice assistant on a Raspberry Pi. Keep all answers under 2 sentences.",
+        "prompt": prompt,
+        "stream": True  # Enable Ollama streaming mode
+    }
+
+    print("Qwen: ", end="", flush=True)
+    sentence_buffer = ""
+
+    try:
+        with requests.post(url, json=payload, stream=True, timeout=15) as response:
+            for line in response.iter_lines():
+                if line:
+                    data = response.json()
+                    token = data.get("response", "")
+                    sentence_buffer += token
+                    print(token, end="", flush=True)
+
+                    # Trigger TTS as soon as a full clause/sentence is formed
+                    if token in [".", "!", "?", "\n"]:
+                        speak_text_direct(sentence_buffer)
+                        sentence_buffer = ""
+
+        # Flush any remaining text in the buffer
+        if sentence_buffer.strip():
+            speak_text_direct(sentence_buffer)
+        print()
+        
+    except Exception as e:
+        print(f"\n[Ollama Error]: {e}")
+
+# ==================== MAIN LOOP ====================
+print(f"\nVoice Assistant Ready. Waiting for wake word '{WAKE_WORD}'...")
+
+with sd.InputStream(
+    samplerate=SAMPLE_RATE, 
+    channels=1, 
+    dtype='int16', 
+    blocksize=CHUNK, 
+    device=MIC_DEVICE
+) as stream:
+    while True:
+        data, _ = stream.read(CHUNK)
+        audio_frame = np.frombuffer(data, dtype=np.int16)
+        
+        # Feed frame to wake word engine
+        prediction = owwModel.predict(audio_frame)
+        
+        # Check wake word threshold (> 0.5 default, drop to 0.25 if struggling to trigger)
+        if prediction[WAKE_WORD] > 0.5:
+            print("\nWake word detected!")
+            owwModel.reset()
+            
+            # Step A: Record User Voice Prompt
+            audio_file = record_audio(duration=5)
+            
+            # Step B: Transcribe Audio (Whisper STT)
+            print("Transcribing...")
+            segments, _ = whisper.transcribe(audio_file)
+            user_text = "".join([segment.text for segment in segments]).strip()
+            print(f"User: {user_text}")
+            
+            # Step C & D: Generate Response (Qwen) & Synthesize Audio (Piper)
+            if user_text:
+                print("Thinking & Speaking...")
+                stream_qwen_and_speak(user_text)
+                
+            print(f"\nWaiting for wake word '{WAKE_WORD}'...")

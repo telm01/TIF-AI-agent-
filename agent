@@ -1,0 +1,83 @@
+from google.adk import Event, Workflow
+from google.adk.agents import Agent
+from google.adk.agents import LlmAgent
+from google.adk.models.lite_llm import LiteLlm
+
+ollama_model = LiteLlm(model="ollama_chat/qwen2.5:3b-instruct")
+
+
+# ---------------------------------------------------------------------------
+# Entry node: produces the text that router/condition will inspect
+# ---------------------------------------------------------------------------
+
+def task_A_node(node_input: str):
+    """A FunctionNode to execute node A. Its output becomes router's input."""
+    return Event(output=node_input)
+
+
+# ---------------------------------------------------------------------------
+# Router: decides between task B (agent) and task C (function)
+# ---------------------------------------------------------------------------
+
+def condition(node_input: str) -> bool:
+    """Return True to route to task C, False to route to task B and task D."""
+    return "urgent" in node_input.lower()
+
+
+def router(node_input: str):
+    """Route to task B or D or C based on node_input."""
+    if condition(node_input):
+        return Event(route="RUN_TASK_C")
+    return Event(route="RUN_TASK_B")
+    return Event(route="RUN_TASK_D")
+
+
+# ---------------------------------------------------------------------------
+# Task B: an LLM-backed agent
+# ---------------------------------------------------------------------------
+
+task_B_node = LlmAgent(
+    name="task_B_agent",
+    model=ollama_model,
+    instruction=(
+        "You help the user by solving the math problems"
+    ),
+    
+)
+task_D_node=LlmAgent(
+    name="task_d_agent",
+    model=ollama_model,
+    instruction=(
+        "You become a elemnentry language tutor when user asks you to "
+        "Ask questions about the problem of a alphabet "
+    ),
+)
+# ---------------------------------------------------------------------------
+# Task C: a plain function node (no LLM call needed)
+# ---------------------------------------------------------------------------
+
+def task_C_node(node_input: str):
+    """Look something up or compute something — no LLM needed."""
+    result = do_some_lookup(node_input)
+    return Event(output=result)
+
+
+# ---------------------------------------------------------------------------
+# Workflow graph
+# ---------------------------------------------------------------------------
+
+root_agent = Workflow(
+    name="routing_workflow",
+    edges=[
+        ("START", task_A_node, router),
+        (
+            router,
+            {
+                # "route value": node_to_run
+                "RUN_TASK_B": task_B_node,
+                "RUN_TASK_D": task_D_node,
+                "RUN_TASK_C": task_C_node,
+            },
+        ),
+    ],
+)

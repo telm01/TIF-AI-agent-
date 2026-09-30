@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Number Game</title>
+<style>
+  :root{
+    --bg-top: #1b2340;
+    --bg-bottom: #2a1a45;
+    --panel: #1a2036;
+    --panel-border: rgba(255,255,255,0.08);
+    --ink: #F4F6FA;
+    --ink-soft: #A9B3C9;
+    --teal: #5DD8F0;
+    --teal-dark: #3FB9DC;
+    --lilac: #9C6FE0;
+    --success: #6FE0A0;
+    --success-bg: rgba(111, 224, 160, 0.12);
+    --try-again: #F0B15D;
+    --try-again-bg: rgba(240, 177, 93, 0.12);
+    --hint-bg: rgba(156, 111, 224, 0.14);
+    --hint-border: rgba(156, 111, 224, 0.5);
+    --border: rgba(255,255,255,0.12);
+    --focus: #5DD8F0;
+    --radius: 18px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: radial-gradient(circle at 20% 15%, #24345e 0%, var(--bg-top) 35%, var(--bg-bottom) 100%);
+    background-attachment: fixed;
+    color: var(--ink);
+    font-family: 'Trebuchet MS', Verdana, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+  }
+
+  .app { max-width: 90vw; margin: 0 auto; padding: 20px 16px 100px; }
+
+  header { text-align: center; margin-bottom: 18px; }
+  .header-icon { font-size: 2.4rem; line-height: 1; }
+  header h1 { font-size: clamp(1.6rem, 5vw, 2.3rem); margin: 6px 0 2px; color: var(--teal); }
+  header p { margin: 0; color: var(--ink-soft); font-size: 1.05rem; }
+
+  .controls {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 22px;
+  }
+  .control-group { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+  .control-group label { font-size: 0.85rem; color: var(--ink-soft); font-weight: bold; }
+
+  select, .icon-toggle {
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 2px solid var(--border);
+    background: #10152a;
+    color: var(--ink);
+  }
+
+  select:focus, .icon-toggle:focus, button:focus, .choice-btn:focus {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .icon-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+  .icon-toggle input { width: 18px; height: 18px; cursor: pointer; }
+
+  .btn {
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: bold;
+    padding: 10px 20px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    background: linear-gradient(90deg, var(--teal), var(--lilac));
+    color: #10152a;
+    transition: filter 0.15s ease, transform 0.1s ease;
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:active { transform: scale(0.97); }
+  .btn.secondary { background: transparent; color: var(--teal); border: 2px solid var(--teal); }
+  .btn.secondary:hover { background: rgba(93, 216, 240, 0.1); }
+  .btn.ghost { background: transparent; color: var(--lilac); border: 2px solid var(--lilac); }
+  .btn.ghost:hover { background: rgba(156, 111, 224, 0.12); }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+
+  .status-bar { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 1.05rem; color: var(--ink-soft); }
+  .progress-track { width: 180px; height: 12px; background: rgba(255,255,255,0.1); border-radius: 8px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--teal), var(--lilac)); width: 0%; transition: width 0.3s ease; }
+
+  .message-banner { text-align: center; min-height: 32px; font-size: 1.15rem; font-weight: bold; color: var(--teal); margin-bottom: 6px; }
+  .prompt { text-align: center; font-size: 1.15rem; color: var(--ink); margin-bottom: 18px; }
+
+  .kb-hint {
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    margin: 0 0 14px;
+  }
+  .kb-hint kbd {
+    background: #10152a;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1px 6px;
+    font-family: inherit;
+    color: var(--teal);
+  }
+
+  .hint-box {
+    display: none; text-align: center; background: var(--hint-bg); border: 2px solid var(--hint-border);
+    border-radius: 12px; padding: 10px 16px; margin: 0 auto 18px; max-width: 480px; color: #D9CBFA; font-size: 1rem;
+  }
+  .hint-box.visible { display: block; }
+
+  .game-panel { background: var(--panel); border: 1px solid var(--panel-border); border-radius: var(--radius); padding: 60px 20px; }
+
+  .objects-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 20px; }
+  .obj-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 14px; background: #10152a; border: 2px solid var(--border); border-radius: 14px; min-width: 140px; }
+  .obj { font-size: 2.4rem; }
+  .plus-sign { font-size: 2.6rem; color: var(--lilac); font-weight: bold; display: flex; align-items: center; }
+
+  .choices-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+  .choice-btn {
+    min-width: 68px; height: 68px; padding: 0 12px; border-radius: 16px; border: 3px solid var(--border);
+    background: #10152a; font-size: 1.8rem; font-weight: bold; cursor: pointer; color: var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+  }
+  .choice-btn:hover:not(:disabled) { border-color: var(--teal); transform: translateY(-1px); }
+  .choice-btn.correct { border-color: var(--success); background: var(--success-bg); }
+  .choice-btn.shake { border-color: var(--try-again); background: var(--try-again-bg); }
+  @media (prefers-reduced-motion: no-preference) {
+    .choice-btn.shake { animation: shake 0.4s ease; }
+    .choice-btn.correct { animation: pulse 0.35s ease; }
+  }
+  @keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-4px);} 75%{transform:translateX(4px);} }
+  @keyframes pulse { 0%{transform:scale(1);} 50%{transform:scale(1.08);} 100%{transform:scale(1);} }
+
+  .next-row { text-align: center; margin-top: 24px; }
+
+  .celebration { text-align: center; background: var(--panel); border: 2px solid var(--success); border-radius: var(--radius); padding: 26px 18px; }
+  .celebration .big-emoji { font-size: 3rem; }
+  .celebration h2 { color: var(--teal); margin: 6px 0; }
+  .celebration p { color: var(--ink-soft); margin: 0 0 16px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="header-icon" aria-hidden="true">🔢</div>
+    <h1>Number Game</h1>
+    <p>Count, add, and find the answer</p>
+  </header>
+
+  <div class="controls">
+    <div class="control-group">
+      <label for="mode-select">Game</label>
+      <select id="mode-select">
+        <option value="count">Let's count</option>
+        <option value="add">Addition problems</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label for="difficulty-select">Level</label>
+      <select id="difficulty-select">
+        <option value="easy">Easy</option>
+        <option value="medium" selected>Medium</option>
+        <option value="hard">Hard</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label for="sound-toggle">&nbsp;</label>
+      <label class="icon-toggle" for="sound-toggle">
+        <input type="checkbox" id="sound-toggle">
+        <span id="sound-label">🔇 Sound off</span>
+      </label>
+    </div>
+    <div class="control-group">
+      <label>&nbsp;</label>
+      <button class="btn secondary" id="restart-btn">🔄 Restart</button>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <span id="progress-text">Problem 1 / 5</span>
+    <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="5" aria-valuenow="0" id="progress-bar">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+  </div>
+
+  <div class="message-banner" id="message-banner" aria-live="polite">Let's take it slow!</div>
+  <p class="kb-hint">⌨️ <kbd>←</kbd><kbd>→</kbd> move between choices, <kbd>Enter</kbd> select, <kbd>Esc</kbd> restart, <kbd>Delete</kbd> new problem</p>
+
+  <div id="play-area">
+    <p class="prompt" id="prompt-text">How many?</p>
+    <div class="hint-box" id="hint-box"></div>
+
+    <div class="game-panel">
+      <div class="objects-row" id="objects-row"></div>
+      <div class="choices-row" id="choices-row"></div>
+    </div>
+
+    <div class="next-row">
+      <button class="btn ghost" id="hint-btn">💡 Hint</button>
+      <button class="btn" id="next-btn" style="display:none;">Next problem →</button>
+    </div>
+  </div>
+
+  <div class="celebration" id="celebration" style="display:none;" role="status">
+    <div class="big-emoji" aria-hidden="true">🎉</div>
+    <h2>Great job!</h2>
+    <p>You solved all 5 problems.</p>
+    <button class="btn" id="play-again-btn">Play again</button>
+  </div>
+</div>
+
+<script>
+  // ---- Bridge to the local Flask server (server.py) ----
+  // The voice assistant script polls Flask's /current_problem, so every
+  // time a round renders or is solved we push the latest state there.
+  const BRIDGE_URL = 'http://localhost:5000/update';
+
+  function reportProblemToServer(solvedFlag) {
+    if (!currentRound) return;
+    const payload = {
+      type: currentRound.type,
+      prompt: currentRound.prompt,
+      hint: currentRound.hint,
+      answer: currentRound.answer,
+      solved: !!solvedFlag,
+    };
+    fetch(BRIDGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => {
+      // Bridge server may not be running (e.g. testing in a plain browser
+      // tab) — fail silently so the game itself never breaks.
+    });
+  }
+
+  const OBJECT_ICONS = ["🍎","🍌","🍓","⭐","🐶","🐱","🎈","🚗","🌸","🐟"];
+  const TOTAL_ROUNDS = 5;
+
+  const modeSelect = document.getElementById('mode-select');
+  const difficultySelect = document.getElementById('difficulty-select');
+  const soundToggle = document.getElementById('sound-toggle');
+  const soundLabel = document.getElementById('sound-label');
+  const restartBtn = document.getElementById('restart-btn');
+  const playAgainBtn = document.getElementById('play-again-btn');
+  const progressText = document.getElementById('progress-text');
+  const progressFill = document.getElementById('progress-fill');
+  const progressBar = document.getElementById('progress-bar');
+  const messageBanner = document.getElementById('message-banner');
+  const promptText = document.getElementById('prompt-text');
+  const hintBox = document.getElementById('hint-box');
+  const hintBtn = document.getElementById('hint-btn');
+  const nextBtn = document.getElementById('next-btn');
+  const playArea = document.getElementById('play-area');
+  const celebration = document.getElementById('celebration');
+  const objectsRow = document.getElementById('objects-row');
+  const choicesRow = document.getElementById('choices-row');
+
+  let currentRoundIndex = 0;
+  let currentRound = null;
+  let solved = false;
+  let audioCtx = null;
+
+  function focusFirstChoice(container) {
+    const el = container.querySelector('button:not([disabled]), [role="button"]:not(.disabled)');
+    if (el) el.focus();
+  }
+
+  function attachRovingNav(container) {
+    container.addEventListener('keydown', (e) => {
+      if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(e.key)) return;
+      const items = Array.from(container.querySelectorAll('button:not([disabled]), [role="button"]:not(.disabled)'));
+      if (!items.length) return;
+      const currentIndex = items.indexOf(document.activeElement);
+      let nextIndex;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % items.length;
+      } else {
+        nextIndex = currentIndex < 0 ? items.length - 1 : (currentIndex - 1 + items.length) % items.length;
+      }
+      e.preventDefault();
+      items[nextIndex].focus();
+    });
+  }
+
+  attachRovingNav(choicesRow);
+
+document.addEventListener('keydown', (e) => {
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'select') return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      window.location.href = 'index_en.html';
+    } else if (e.key === 'Delete') {
+      e.preventDefault();
+      renderRound();
+    }
+  });
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function playTone(freqs, duration) {
+    if (!soundToggle.checked) return;
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const now = audioCtx.currentTime;
+      freqs.forEach((freq, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(0.08, now + 0.02 + i * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration + i * 0.08);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now + i * 0.08);
+        osc.stop(now + duration + i * 0.08 + 0.05);
+      });
+    } catch (e) {}
+  }
+  function playSuccessSound() { playTone([523.25, 659.25, 783.99], 0.25); }
+  function playTrySound() { playTone([349.23], 0.2); }
+
+  soundToggle.addEventListener('change', () => {
+    soundLabel.textContent = soundToggle.checked ? '🔊 Sound on' : '🔇 Sound off';
+  });
+
+  function numberChoices(answer, maxVal, count) {
+    const pool = new Set([answer]);
+    while (pool.size < count) {
+      const candidate = Math.max(0, Math.min(maxVal, answer + (Math.floor(Math.random() * 7) - 3)));
+      pool.add(candidate);
+    }
+    return shuffle([...pool]);
+  }
+
+  function buildCountRound(difficulty) {
+    const range = difficulty === 'easy' ? [1,5] : difficulty === 'medium' ? [3,10] : [6,15];
+    const n = Math.floor(Math.random() * (range[1]-range[0]+1)) + range[0];
+    const icon = OBJECT_ICONS[Math.floor(Math.random() * OBJECT_ICONS.length)];
+    const choiceCount = difficulty === 'easy' ? 3 : 4;
+    return {
+      type: 'count', icon, n, answer: n,
+      choices: numberChoices(n, range[1] + 3, choiceCount),
+      prompt: 'How many pictures are there?',
+      hint: `Try counting one, two, three... There are ${n} in total.`,
+    };
+  }
+
+  function buildAddRound(difficulty) {
+    const range = difficulty === 'easy' ? [1,5] : difficulty === 'medium' ? [1,8] : [1,12];
+    const a = Math.floor(Math.random() * (range[1]-range[0]+1)) + range[0];
+    const b = Math.floor(Math.random() * (range[1]-range[0]+1)) + range[0];
+    const icon = OBJECT_ICONS[Math.floor(Math.random() * OBJECT_ICONS.length)];
+    const sum = a + b;
+    const choiceCount = difficulty === 'easy' ? 3 : 4;
+    return {
+      type: 'add', icon, a, b, answer: sum,
+      choices: numberChoices(sum, range[1]*2 + 3, choiceCount),
+      prompt: 'How many are there altogether?',
+      hint: `Start with ${a}, then add ${b}. ${a} + ${b} = ${sum}.`,
+    };
+  }
+
+  function generateRound() {
+    const mode = modeSelect.value;
+    const difficulty = difficultySelect.value;
+    return mode === 'count' ? buildCountRound(difficulty) : buildAddRound(difficulty);
+  }
+
+  function renderRound() {
+    solved = false;
+    hintBox.classList.remove('visible');
+    hintBox.textContent = '';
+    nextBtn.style.display = 'none';
+    messageBanner.textContent = "Let's take it slow!";
+
+    currentRound = generateRound();
+    promptText.textContent = currentRound.prompt;
+
+    objectsRow.innerHTML = '';
+    if (currentRound.type === 'count') {
+      const group = document.createElement('div');
+      group.className = 'obj-group';
+      for (let i = 0; i < currentRound.n; i++) {
+        const span = document.createElement('span');
+        span.className = 'obj';
+        span.textContent = currentRound.icon;
+        span.setAttribute('aria-hidden', 'true');
+        group.appendChild(span);
+      }
+      objectsRow.appendChild(group);
+    } else {
+      const groupA = document.createElement('div');
+      groupA.className = 'obj-group';
+      for (let i = 0; i < currentRound.a; i++) {
+        const span = document.createElement('span');
+        span.className = 'obj';
+        span.textContent = currentRound.icon;
+        groupA.appendChild(span);
+      }
+      const plus = document.createElement('div');
+      plus.className = 'plus-sign';
+      plus.textContent = '+';
+      const groupB = document.createElement('div');
+      groupB.className = 'obj-group';
+      for (let i = 0; i < currentRound.b; i++) {
+        const span = document.createElement('span');
+        span.className = 'obj';
+        span.textContent = currentRound.icon;
+        groupB.appendChild(span);
+      }
+      objectsRow.appendChild(groupA);
+      objectsRow.appendChild(plus);
+      objectsRow.appendChild(groupB);
+    }
+
+    choicesRow.innerHTML = '';
+    currentRound.choices.forEach(num => {
+      const btn = document.createElement('button');
+      btn.className = 'choice-btn';
+      btn.textContent = num;
+      btn.setAttribute('aria-label', `Answer ${num}`);
+      btn.addEventListener('click', () => handleChoice(btn, num));
+      choicesRow.appendChild(btn);
+    });
+    focusFirstChoice(choicesRow);
+
+    updateProgress();
+    reportProblemToServer(false);
+  }
+
+  function handleChoice(btn, num) {
+    if (solved) return;
+    if (num === currentRound.answer) {
+      solved = true;
+      btn.classList.add('correct');
+      choicesRow.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+      messageBanner.textContent = 'Great job! 🌟';
+      playSuccessSound();
+      nextBtn.style.display = 'inline-block';
+      nextBtn.focus();
+      reportProblemToServer(true);
+    } else {
+      btn.classList.add('shake');
+      messageBanner.textContent = 'Try again, you can do it!';
+      playTrySound();
+      setTimeout(() => btn.classList.remove('shake'), 450);
+    }
+  }
+
+  function updateProgress() {
+    progressText.textContent = `Problem ${currentRoundIndex + 1} / ${TOTAL_ROUNDS}`;
+    const pct = (currentRoundIndex / TOTAL_ROUNDS) * 100;
+    progressFill.style.width = pct + '%';
+    progressBar.setAttribute('aria-valuenow', currentRoundIndex);
+  }
+
+  function showCelebration() {
+    playArea.style.display = 'none';
+    messageBanner.textContent = '';
+    celebration.style.display = 'block';
+  }
+
+  function startSession() {
+    currentRoundIndex = 0;
+    playArea.style.display = 'block';
+    celebration.style.display = 'none';
+    renderRound();
+  }
+
+  hintBtn.addEventListener('click', () => {
+    hintBox.textContent = '💡 ' + currentRound.hint;
+    hintBox.classList.add('visible');
+  });
+
+  nextBtn.addEventListener('click', () => {
+    currentRoundIndex++;
+    if (currentRoundIndex >= TOTAL_ROUNDS) {
+      progressFill.style.width = '100%';
+      showCelebration();
+    } else {
+      renderRound();
+    }
+  });
+
+  restartBtn.addEventListener('click', startSession);
+  playAgainBtn.addEventListener('click', startSession);
+  modeSelect.addEventListener('change', startSession);
+  difficultySelect.addEventListener('change', startSession);
+
+  startSession();
+</script>
+</body>
+</html>
